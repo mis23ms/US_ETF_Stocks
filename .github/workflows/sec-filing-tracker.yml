@@ -2,35 +2,44 @@ name: SEC Filing Tracker
 
 on:
   schedule:
-    # Every Saturday 04:00 UTC = 12:00 Asia/Taipei
-    - cron: "0 4 * * 6"
+    - cron: '0 4 * * 6'  # Every Saturday 12:00 Taiwan time (UTC 04:00)
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
-  run:
+  track-filings:
     runs-on: ubuntu-latest
+    
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/checkout@v3
+      
+      - name: Set up Python
+        uses: actions/setup-python@v4
         with:
-          python-version: "3.11"
-
-      - name: Install dependencies
-        run: pip install requests
-
+          python-version: '3.11'
+      
+      - name: Install system dependencies for weasyprint
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libpango-1.0-0 \
+            libpangoft2-1.0-0 \
+            libffi-dev \
+            libjpeg-dev \
+            libopenjp2-7-dev
+      
+      - name: Install Python dependencies
+        run: |
+          pip install requests weasyprint
+      
       - name: Run tracker
-        run: python scripts/sec_filing_tracker.py
-
-      - name: Commit & push
+        run: |
+          python scripts/sec_filing_tracker.py
+      
+      - name: Commit and push
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add reports index.md sources
-          git commit -m "Update SEC filing report" || exit 0
+          git diff --staged --quiet || git commit -m "Update SEC filing reports [$(date +'%Y-%m-%d')]"
           git push
