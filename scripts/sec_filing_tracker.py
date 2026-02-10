@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, date
 from zoneinfo import ZoneInfo
 
 import requests
+from weasyprint import HTML
 
 USER_AGENT = "SEC-Filing-Tracker mis23ms@gmail.com"
 FORMS = {"10-K", "10-Q", "20-F", "8-K", "6-K"}
@@ -74,7 +75,7 @@ def archive_url(cik: int, accession: str, primary_doc: str) -> str:
 
 
 def save_sources(report_date: date, tickers, results):
-    """Download HTML filing sources for NotebookLM analysis"""
+    """Download HTML filings and convert to PDF for NotebookLM"""
     base = os.path.join(SOURCES_DIR, report_date.isoformat())
     os.makedirs(base, exist_ok=True)
 
@@ -87,8 +88,8 @@ def save_sources(report_date: date, tickers, results):
     for item in tickers:
         t = item["ticker"]
         for f in results.get(t, []):
-            # Save as HTML file for NotebookLM
-            fname = f"{t}_{f['form']}_{f['filed']}.html".replace("/", "-")
+            # Save as PDF for NotebookLM
+            fname = f"{t}_{f['form']}_{f['filed']}.pdf".replace("/", "-")
             path = os.path.join(base, fname)
             url = f.get("url")
 
@@ -96,21 +97,22 @@ def save_sources(report_date: date, tickers, results):
                 continue
 
             try:
+                # Download HTML
                 r = requests.get(url, headers=headers, timeout=30)
                 
-                # Skip if not found
                 if r.status_code == 404:
-                    print(f"Skip {t} {f['form']}: HTML not found")
+                    print(f"Skip {t} {f['form']}: Not found")
                     continue
 
                 r.raise_for_status()
 
-                with open(path, "w", encoding="utf-8", errors="ignore") as out:
-                    out.write(r.text)
-
-                time.sleep(0.2)  # Avoid SEC rate limit
+                # Convert HTML to PDF
+                HTML(string=r.text, base_url=url).write_pdf(path)
                 
-            except requests.exceptions.RequestException as e:
+                print(f"Saved: {fname}")
+                time.sleep(0.3)  # Avoid SEC rate limit
+                
+            except Exception as e:
                 print(f"Skip {t} {f['form']} {f['filed']}: {e}")
                 continue
 
@@ -161,7 +163,7 @@ def write_report(report_date: date, tickers, results):
     lines = []
     lines.append(f"# SEC Filing Tracker — {report_date.isoformat()}")
     lines.append("")
-    lines.append(f"📁 **Sources:** Download HTML files from `sources/{report_date.isoformat()}/` for NotebookLM analysis")
+    lines.append(f"📁 **Sources:** PDF files saved in `sources/{report_date.isoformat()}/` for NotebookLM analysis")
     lines.append("")
 
     for item in tickers:
@@ -171,7 +173,6 @@ def write_report(report_date: date, tickers, results):
         filings = results.get(t, [])
         if filings:
             for f in filings:
-                # Only show HTML link (always exists)
                 lines.append(f"- {f['form']} | Filed: {f['filed']} | 🔗 [View Filing]({f['url']})")
         else:
             lines.append("_No new filings in last 30 days_")
