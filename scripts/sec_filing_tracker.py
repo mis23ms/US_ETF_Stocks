@@ -11,6 +11,7 @@ USER_AGENT = "SEC-Filing-Tracker mis23ms@gmail.com"  # ← 只改這行
 FORMS = {"10-K", "10-Q", "20-F", "8-K", "6-K"}
 TICKERS_PATH = os.path.join("config", "tickers.json")
 REPORTS_DIR = "reports"
+SOURCES_DIR = "sources"
 INDEX_PATH = "index.md"
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}\.md$")
 
@@ -71,6 +72,33 @@ def archive_url(cik: int, accession: str, primary_doc: str) -> str:
     acc_nodash = accession.replace("-", "")
     return f"https://www.sec.gov/Archives/edgar/data/{cik_nolead}/{acc_nodash}/{primary_doc}"
 
+def filing_txt_url(cik: int, accession: str) -> str:
+    cik_nolead = str(int(cik))
+    acc_nodash = accession.replace("-", "")
+    return f"https://www.sec.gov/Archives/edgar/data/{cik_nolead}/{acc_nodash}/{acc_nodash}.txt"
+
+
+def save_sources(report_date: date, tickers, results):
+    base = os.path.join(SOURCES_DIR, report_date.isoformat())
+    os.makedirs(base, exist_ok=True)
+
+    headers = {
+        "User-Agent": USER_AGENT,
+        "From": USER_AGENT.split()[-1],
+        "Accept": "text/plain",
+    }
+
+    for item in tickers:
+        t = item["ticker"]
+        for f in results.get(t, []):
+            # 每個 filing 存成一個 txt 檔，NotebookLM 直接吃這些檔案就能摘要
+            fname = f"{t}_{f['form']}_{f['filed']}.txt".replace("/", "-")
+            path = os.path.join(base, fname)
+
+            r = requests.get(f["txt_url"], headers=headers, timeout=30)
+            r.raise_for_status()
+            with open(path, "w", encoding="utf-8", errors="ignore") as out:
+                out.write(r.text)
 
 def parse_recent_filings(submissions: dict, cutoff: date):
     recent = submissions.get("filings", {}).get("recent", {})
@@ -97,13 +125,16 @@ def parse_recent_filings(submissions: dict, cutoff: date):
         if not acc or not pdoc:
             continue
 
+        cik_val = int(submissions.get("cik", 0) or 0)
         filings.append(
             {
                 "form": form,
                 "filed": filed.isoformat(),
-                "url": archive_url(int(submissions.get("cik", 0) or 0), acc, pdoc),
+                "url": archive_url(cik_val, acc, pdoc),
+                "txt_url": filing_txt_url(cik_val, acc),
             }
         )
+
 
     # Newest first
     filings.sort(key=lambda x: x["filed"], reverse=True)
@@ -125,7 +156,9 @@ def write_report(report_date: date, tickers, results):
         filings = results.get(t, [])
         if filings:
             for f in filings:
-                lines.append(f"- {f['form']} | Filed: {f['filed']} | 🔗 [Link]({f['url']})")
+                lines.append(
+                    f"- {f['form']} | Filed: {f['filed']} | 🔗 [HTML]({f['url']}) | [TXT]({f['txt_url']})"
+                )
         else:
             lines.append("_No new filings in last 30 days_")
         lines.append("")
@@ -189,6 +222,7 @@ def main():
         results[t] = parse_recent_filings(subs, cutoff)
 
     write_report(report_date, tickers, results)
+    save_sources(report_date, tickers, results)
     update_index()
     cleanup_old_reports(report_date, keep_days=30)
 
