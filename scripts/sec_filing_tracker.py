@@ -88,6 +88,47 @@ def save_sources(report_date: date, tickers, results):
         "Accept": "text/plain",
     }
 
+    def _dash_accno_from_nodash(acc_nodash: str) -> str:
+        # 000104581026000003 -> 0001045810-26-000003
+        if len(acc_nodash) >= 18:
+            return f"{acc_nodash[:10]}-{acc_nodash[10:12]}-{acc_nodash[12:]}"
+        return acc_nodash
+
+    for item in tickers:
+        t = item["ticker"]
+        for f in results.get(t, []):
+            fname = f"{t}_{f['form']}_{f['filed']}.txt".replace("/", "-")
+            path = os.path.join(base, fname)
+
+            url = f.get("txt_url")
+            if not url:
+                continue
+
+            try:
+                r = requests.get(url, headers=headers, timeout=30)
+                if r.status_code == 404:
+                    # 有些 submission text 檔名是「有破折號」版本，再試一次
+                    acc_nodash = url.rstrip("/").split("/")[-1].replace(".txt", "")
+                    acc_dash = _dash_accno_from_nodash(acc_nodash)
+                    alt_url = url.replace(f"/{acc_nodash}.txt", f"/{acc_dash}.txt")
+                    r = requests.get(alt_url, headers=headers, timeout=30)
+
+                if r.status_code == 404:
+                    # TXT 真的不存在就跳過，不讓整個流程中斷
+                    print(f"Warning: TXT not found, skip: {t} {f['form']} {f['filed']}")
+                    continue
+
+                r.raise_for_status()
+                with open(path, "w", encoding="utf-8", errors="ignore") as out:
+                    out.write(r.text)
+
+                time.sleep(0.2)  # 避免打太快被 SEC 擋
+            except requests.exceptions.RequestException as e:
+                # 其他錯誤也不炸掉整個流程（例如 403/429/暫時性錯誤）
+                print(f"Warning: Failed to download TXT for {t} {f['form']} {f['filed']}: {e}")
+                continue
+
+
     for item in tickers:
         t = item["ticker"]
         for f in results.get(t, []):
