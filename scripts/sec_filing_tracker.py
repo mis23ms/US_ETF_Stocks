@@ -73,41 +73,36 @@ def archive_url(cik: int, accession: str, primary_doc: str) -> str:
     return f"https://www.sec.gov/Archives/edgar/data/{cik_nolead}/{acc_nodash}/{primary_doc}"
 
 
-def filing_txt_url(cik: int, accession: str) -> str:
-    cik_nolead = str(int(cik))
-    acc_nodash = accession.replace("-", "")
-    return f"https://www.sec.gov/Archives/edgar/data/{cik_nolead}/{acc_nodash}/{acc_nodash}.txt"
-
-
 def save_sources(report_date: date, tickers, results):
-    """Download TXT filing sources, skip if 404 not found"""
+    """Download HTML filing sources for NotebookLM analysis"""
     base = os.path.join(SOURCES_DIR, report_date.isoformat())
     os.makedirs(base, exist_ok=True)
 
     headers = {
         "User-Agent": USER_AGENT,
         "From": USER_AGENT.split()[-1],
-        "Accept": "text/plain",
+        "Accept": "text/html",
     }
 
     for item in tickers:
         t = item["ticker"]
         for f in results.get(t, []):
-            fname = f"{t}_{f['form']}_{f['filed']}.txt".replace("/", "-")
+            # Save as HTML file for NotebookLM
+            fname = f"{t}_{f['form']}_{f['filed']}.html".replace("/", "-")
             path = os.path.join(base, fname)
-            url = f.get("txt_url")
+            url = f.get("url")
 
             if not url:
                 continue
 
             try:
                 r = requests.get(url, headers=headers, timeout=30)
-
-                # Skip if 404 (TXT file doesn't exist)
+                
+                # Skip if not found
                 if r.status_code == 404:
+                    print(f"Skip {t} {f['form']}: HTML not found")
                     continue
 
-                # Check for other errors (403, 500, etc.)
                 r.raise_for_status()
 
                 with open(path, "w", encoding="utf-8", errors="ignore") as out:
@@ -151,7 +146,6 @@ def parse_recent_filings(submissions: dict, cutoff: date):
                 "form": form,
                 "filed": filed.isoformat(),
                 "url": archive_url(cik_val, acc, pdoc),
-                "txt_url": filing_txt_url(cik_val, acc),
             }
         )
 
@@ -167,6 +161,8 @@ def write_report(report_date: date, tickers, results):
     lines = []
     lines.append(f"# SEC Filing Tracker — {report_date.isoformat()}")
     lines.append("")
+    lines.append(f"📁 **Sources:** Download HTML files from `sources/{report_date.isoformat()}/` for NotebookLM analysis")
+    lines.append("")
 
     for item in tickers:
         t = item["ticker"]
@@ -175,9 +171,8 @@ def write_report(report_date: date, tickers, results):
         filings = results.get(t, [])
         if filings:
             for f in filings:
-                lines.append(
-                    f"- {f['form']} | Filed: {f['filed']} | 🔗 [HTML]({f['url']}) | [TXT]({f['txt_url']})"
-                )
+                # Only show HTML link (always exists)
+                lines.append(f"- {f['form']} | Filed: {f['filed']} | 🔗 [View Filing]({f['url']})")
         else:
             lines.append("_No new filings in last 30 days_")
         lines.append("")
