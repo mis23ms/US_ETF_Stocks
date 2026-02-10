@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-USER_AGENT = "SEC-Filing-Tracker mis23ms@users.noreply.github.com"
+USER_AGENT = "SEC-Filing-Tracker mis23ms@gmail.com"  # ← 只改這行
 FORMS = {"10-K", "10-Q", "20-F", "8-K", "6-K"}
 TICKERS_PATH = os.path.join("config", "tickers.json")
 REPORTS_DIR = "reports"
