@@ -1,12 +1,13 @@
 import json
 import os
 import re
+import time
 from datetime import datetime, timedelta, date
 from zoneinfo import ZoneInfo
 
 import requests
 
-USER_AGENT = "SEC-Filing-Tracker github-actions-bot@example.com"
+USER_AGENT = "SEC-Filing-Tracker mis23ms@users.noreply.github.com"
 FORMS = {"10-K", "10-Q", "20-F", "8-K", "6-K"}
 TICKERS_PATH = os.path.join("config", "tickers.json")
 REPORTS_DIR = "reports"
@@ -17,11 +18,20 @@ DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}\.md$")
 def http_get_json(url: str) -> dict:
     headers = {
         "User-Agent": USER_AGENT,
+        "From": USER_AGENT.split()[-1],  # email
         "Accept": "application/json",
     }
-    r = requests.get(url, headers=headers, timeout=30)
-    r.raise_for_status()
-    return r.json()
+
+    for attempt in range(4):  # total 4 tries
+        r = requests.get(url, headers=headers, timeout=30)
+        if r.status_code in (403, 429, 500, 502, 503, 504):
+            if attempt < 3:
+                time.sleep(2 ** (attempt + 1))  # 2s, 4s, 8s
+                continue
+        r.raise_for_status()
+        return r.json()
+
+    raise RuntimeError("Failed to fetch JSON after retries")
 
 
 def load_tickers():
@@ -173,6 +183,7 @@ def main():
             continue
 
         subs = http_get_json(submissions_url(cik))
+        time.sleep(0.2)
         # Ensure cik is present for URL building
         subs["cik"] = cik
         results[t] = parse_recent_filings(subs, cutoff)
