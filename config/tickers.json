@@ -1,0 +1,15 @@
+[
+  {"ticker": "NVDA", "name": "NVIDIA"},
+  {"ticker": "GE", "name": "GE Aerospace"},
+  {"ticker": "AAPL", "name": "Apple"},
+  {"ticker": "AVGO", "name": "Broadcom"},
+  {"ticker": "RTX", "name": "RTX Corp"},
+  {"ticker": "TSM", "name": "TSMC ADR"},
+  {"ticker": "MSFT", "name": "Microsoft"},
+  {"ticker": "MU", "name": "Micron"},
+  {"ticker": "LRCX", "name": "Lam Research"},
+  {"ticker": "AMZN", "name": "Amazon"},
+  {"ticker": "TXN", "name": "Texas Instruments"},
+  {"ticker": "INTC", "name": "Intel"},
+  {"ticker": "AMD", "name": "AMD"}
+]
