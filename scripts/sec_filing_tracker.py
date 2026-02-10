@@ -7,7 +7,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-USER_AGENT = "SEC-Filing-Tracker mis23ms@gmail.com"  # ← 只改這行
+USER_AGENT = "SEC-Filing-Tracker mis23ms@gmail.com"
 FORMS = {"10-K", "10-Q", "20-F", "8-K", "6-K"}
 TICKERS_PATH = os.path.join("config", "tickers.json")
 REPORTS_DIR = "reports"
@@ -72,6 +72,7 @@ def archive_url(cik: int, accession: str, primary_doc: str) -> str:
     acc_nodash = accession.replace("-", "")
     return f"https://www.sec.gov/Archives/edgar/data/{cik_nolead}/{acc_nodash}/{primary_doc}"
 
+
 def filing_txt_url(cik: int, accession: str) -> str:
     cik_nolead = str(int(cik))
     acc_nodash = accession.replace("-", "")
@@ -79,6 +80,7 @@ def filing_txt_url(cik: int, accession: str) -> str:
 
 
 def save_sources(report_date: date, tickers, results):
+    """Download TXT filing sources, skip if 404 not found"""
     base = os.path.join(SOURCES_DIR, report_date.isoformat())
     os.makedirs(base, exist_ok=True)
 
@@ -101,34 +103,22 @@ def save_sources(report_date: date, tickers, results):
             try:
                 r = requests.get(url, headers=headers, timeout=30)
 
-                # ✅ 404 直接跳過，不要 raise_for_status()
+                # Skip if 404 (TXT file doesn't exist)
                 if r.status_code == 404:
                     continue
 
-                # 非 404 才檢查其他錯誤（403/500 等）
+                # Check for other errors (403, 500, etc.)
                 r.raise_for_status()
 
                 with open(path, "w", encoding="utf-8", errors="ignore") as out:
                     out.write(r.text)
 
-                time.sleep(0.2)
+                time.sleep(0.2)  # Avoid SEC rate limit
+                
             except requests.exceptions.RequestException as e:
                 print(f"Skip {t} {f['form']} {f['filed']}: {e}")
                 continue
 
-
-
-    for item in tickers:
-        t = item["ticker"]
-        for f in results.get(t, []):
-            # 每個 filing 存成一個 txt 檔，NotebookLM 直接吃這些檔案就能摘要
-            fname = f"{t}_{f['form']}_{f['filed']}.txt".replace("/", "-")
-            path = os.path.join(base, fname)
-
-            r = requests.get(f["txt_url"], headers=headers, timeout=30)
-            r.raise_for_status()
-            with open(path, "w", encoding="utf-8", errors="ignore") as out:
-                out.write(r.text)
 
 def parse_recent_filings(submissions: dict, cutoff: date):
     recent = submissions.get("filings", {}).get("recent", {})
@@ -164,7 +154,6 @@ def parse_recent_filings(submissions: dict, cutoff: date):
                 "txt_url": filing_txt_url(cik_val, acc),
             }
         )
-
 
     # Newest first
     filings.sort(key=lambda x: x["filed"], reverse=True)
