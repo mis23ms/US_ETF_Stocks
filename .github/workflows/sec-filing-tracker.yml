@@ -5,6 +5,9 @@ on:
     - cron: '0 4 * * 6'  # Every Saturday 12:00 Taiwan time (UTC 04:00)
   workflow_dispatch:
 
+permissions:
+  contents: write  # Allow pushing changes
+
 jobs:
   track-filings:
     runs-on: ubuntu-latest
@@ -18,19 +21,9 @@ jobs:
         with:
           python-version: '3.11'
       
-      - name: Install system dependencies for weasyprint
+      - name: Install dependencies
         run: |
-          sudo apt-get update
-          sudo apt-get install -y \
-            libpango-1.0-0 \
-            libpangoft2-1.0-0 \
-            libffi-dev \
-            libjpeg-dev \
-            libopenjp2-7-dev
-      
-      - name: Install Python dependencies
-        run: |
-          pip install requests weasyprint
+          pip install requests
       
       - name: Run tracker
         run: |
@@ -40,6 +33,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add reports index.md sources
+          git add reports index.md
           git diff --staged --quiet || git commit -m "Update SEC filing reports [$(date +'%Y-%m-%d')]"
           git push
