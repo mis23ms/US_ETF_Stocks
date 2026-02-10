@@ -6,13 +6,11 @@ from datetime import datetime, timedelta, date
 from zoneinfo import ZoneInfo
 
 import requests
-from weasyprint import HTML
 
 USER_AGENT = "SEC-Filing-Tracker mis23ms@gmail.com"
 FORMS = {"10-K", "10-Q", "20-F", "8-K", "6-K"}
 TICKERS_PATH = os.path.join("config", "tickers.json")
 REPORTS_DIR = "reports"
-SOURCES_DIR = "sources"
 INDEX_PATH = "index.md"
 DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}\.md$")
 
@@ -20,15 +18,15 @@ DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}\.md$")
 def http_get_json(url: str) -> dict:
     headers = {
         "User-Agent": USER_AGENT,
-        "From": USER_AGENT.split()[-1],  # email
+        "From": USER_AGENT.split()[-1],
         "Accept": "application/json",
     }
 
-    for attempt in range(4):  # total 4 tries
+    for attempt in range(4):
         r = requests.get(url, headers=headers, timeout=30)
         if r.status_code in (403, 429, 500, 502, 503, 504):
             if attempt < 3:
-                time.sleep(2 ** (attempt + 1))  # 2s, 4s, 8s
+                time.sleep(2 ** (attempt + 1))
                 continue
         r.raise_for_status()
         return r.json()
@@ -39,7 +37,6 @@ def http_get_json(url: str) -> dict:
 def load_tickers():
     with open(TICKERS_PATH, "r", encoding="utf-8") as f:
         items = json.load(f)
-    # Normalize
     out = []
     for it in items:
         t = it.get("ticker", "").strip().upper()
@@ -50,8 +47,6 @@ def load_tickers():
 
 
 def build_ticker_to_cik():
-    # Official SEC mapping file (ticker -> CIK)
-    # Requires proper User-Agent.
     data = http_get_json("https://www.sec.gov/files/company_tickers.json")
     mapping = {}
     for _, row in data.items():
@@ -72,49 +67,6 @@ def archive_url(cik: int, accession: str, primary_doc: str) -> str:
     cik_nolead = str(int(cik))
     acc_nodash = accession.replace("-", "")
     return f"https://www.sec.gov/Archives/edgar/data/{cik_nolead}/{acc_nodash}/{primary_doc}"
-
-
-def save_sources(report_date: date, tickers, results):
-    """Download HTML filings and convert to PDF for NotebookLM"""
-    base = os.path.join(SOURCES_DIR, report_date.isoformat())
-    os.makedirs(base, exist_ok=True)
-
-    headers = {
-        "User-Agent": USER_AGENT,
-        "From": USER_AGENT.split()[-1],
-        "Accept": "text/html",
-    }
-
-    for item in tickers:
-        t = item["ticker"]
-        for f in results.get(t, []):
-            # Save as PDF for NotebookLM
-            fname = f"{t}_{f['form']}_{f['filed']}.pdf".replace("/", "-")
-            path = os.path.join(base, fname)
-            url = f.get("url")
-
-            if not url:
-                continue
-
-            try:
-                # Download HTML
-                r = requests.get(url, headers=headers, timeout=30)
-                
-                if r.status_code == 404:
-                    print(f"Skip {t} {f['form']}: Not found")
-                    continue
-
-                r.raise_for_status()
-
-                # Convert HTML to PDF
-                HTML(string=r.text, base_url=url).write_pdf(path)
-                
-                print(f"Saved: {fname}")
-                time.sleep(0.3)  # Avoid SEC rate limit
-                
-            except Exception as e:
-                print(f"Skip {t} {f['form']} {f['filed']}: {e}")
-                continue
 
 
 def parse_recent_filings(submissions: dict, cutoff: date):
@@ -151,7 +103,6 @@ def parse_recent_filings(submissions: dict, cutoff: date):
             }
         )
 
-    # Newest first
     filings.sort(key=lambda x: x["filed"], reverse=True)
     return filings
 
@@ -163,17 +114,41 @@ def write_report(report_date: date, tickers, results):
     lines = []
     lines.append(f"# SEC Filing Tracker — {report_date.isoformat()}")
     lines.append("")
-    lines.append(f"📁 **Sources:** PDF files saved in `sources/{report_date.isoformat()}/` for NotebookLM analysis")
+    lines.append("## 📋 Copy URLs for NotebookLM")
+    lines.append("")
+    lines.append("Copy the URLs below and paste them into NotebookLM as sources:")
+    lines.append("")
+    
+    # Collect all URLs
+    all_urls = []
+    for item in tickers:
+        for f in results.get(item["ticker"], []):
+            all_urls.append(f["url"])
+    
+    # Output URL list
+    if all_urls:
+        lines.append("```")
+        for url in all_urls:
+            lines.append(url)
+        lines.append("```")
+    else:
+        lines.append("_No new filings in last 30 days_")
+    
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+    lines.append("## 📊 Detailed Report")
     lines.append("")
 
     for item in tickers:
         t = item["ticker"]
         name = item["name"]
-        lines.append(f"## {t} — {name}")
+        lines.append(f"### {t} — {name}")
         filings = results.get(t, [])
         if filings:
             for f in filings:
-                lines.append(f"- {f['form']} | Filed: {f['filed']} | 🔗 [View Filing]({f['url']})")
+                lines.append(f"- **{f['form']}** | Filed: {f['filed']}")
+                lines.append(f"  - 🔗 {f['url']}")
         else:
             lines.append("_No new filings in last 30 days_")
         lines.append("")
@@ -185,7 +160,7 @@ def write_report(report_date: date, tickers, results):
 def update_index():
     os.makedirs(REPORTS_DIR, exist_ok=True)
     files = [fn for fn in os.listdir(REPORTS_DIR) if DATE_RE.match(fn)]
-    files.sort(reverse=True)  # newest first
+    files.sort(reverse=True)
 
     lines = ["# SEC Filing Tracker Reports", ""]
     for fn in files:
@@ -218,7 +193,6 @@ def main():
     cutoff = (now_tpe - timedelta(days=30)).date()
 
     tickers = load_tickers()
-
     ticker_to_cik = build_ticker_to_cik()
 
     results = {}
@@ -226,18 +200,15 @@ def main():
         t = it["ticker"]
         cik = ticker_to_cik.get(t)
         if not cik:
-            # Not in SEC mapping => no filings (e.g., non-US listings) -> still output "No new filings"
             results[t] = []
             continue
 
         subs = http_get_json(submissions_url(cik))
         time.sleep(0.2)
-        # Ensure cik is present for URL building
         subs["cik"] = cik
         results[t] = parse_recent_filings(subs, cutoff)
 
     write_report(report_date, tickers, results)
-    save_sources(report_date, tickers, results)
     update_index()
     cleanup_old_reports(report_date, keep_days=30)
 
