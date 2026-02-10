@@ -71,6 +71,52 @@
 
 ---
 
+# SEC Filing Tracker
+
+自動追蹤美股 SEC 申報文件（10-K, 10-Q, 20-F, 8-K, 6-K）
+
+Automatically tracks SEC filings for US stocks (10-K, 10-Q, 20-F, 8-K, 6-K)
+
+---
+
+## 📊 功能 Features
+
+- ✅ 每週六 12:00（台灣時間）自動執行
+- ✅ 追蹤最近 30 天的新申報
+- ✅ 自動生成報告並提供 URL 列表
+- ✅ 可直接複製 URL 到 NotebookLM 分析
+
+---
+
+## 🎯 使用方式 Usage
+
+### 1. 查看週報 View Reports
+打開 [`reports/`](reports/) 資料夾，查看最新的日期檔案（例如：`2026-02-10.md`）
+
+### 2. 複製 URL 到 NotebookLM
+1. 打開報告檔案
+2. 找到 `📋 Copy URLs for NotebookLM` 區塊
+3. 複製所有 URL
+4. 到 [NotebookLM](https://notebooklm.google.com) → 新增來源 → 貼上 URL
+5. 開始提問分析！
+
+### 3. 手動觸發 Manual Trigger
+到 [Actions](../../actions) → 選擇 "SEC Filing Tracker" → Run workflow
+
+---
+
+## ⚙️ 設定 Configuration
+
+編輯 [`config/tickers.json`](config/tickers.json) 來修改追蹤的股票清單
+
+---
+
+## 📅 自動執行 Schedule
+
+每週六 12:00（台灣時間 UTC+8）自動執行
+
+
+
 ## User-Agent（很重要）
 
 SEC 要求請求頭必須包含可聯絡 email，格式為：
