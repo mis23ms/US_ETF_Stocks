@@ -6,7 +6,7 @@ from zoneinfo import ZoneInfo
 
 import requests
 
-USER_AGENT = "github-actions-bot@example.com"
+USER_AGENT = "SEC-Filing-Tracker github-actions-bot@example.com"
 FORMS = {"10-K", "10-Q", "20-F", "8-K", "6-K"}
 TICKERS_PATH = os.path.join("config", "tickers.json")
 REPORTS_DIR = "reports"
