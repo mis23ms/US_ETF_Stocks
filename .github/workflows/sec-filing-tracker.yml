@@ -31,6 +31,6 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add reports index.md
+          git add reports index.md sources
           git commit -m "Update SEC filing report" || exit 0
           git push
